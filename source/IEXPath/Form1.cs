@@ -5,6 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 using commonlib.winapi;
 using mshtml;
@@ -50,11 +51,11 @@ namespace IEXPath
 
         private void frmIEXPath_Load(object sender, EventArgs e)
         {
-            this.Text = "IEXPath - " + _VERSION ;
+            this.Text = "IEXPath - " + _VERSION;
             this.moveCursor = new Cursor(new System.IO.MemoryStream(Properties.Resources.pen_r));
             Win32API.SetWindowPos(this.Handle, -1, 0, 0, 0, 0, 1 | 2);
 
-            if (! Win32API.RegisterHotKey(this.Handle, this.hotkeyId, commonlib.winapi.Win32API.KeyModifiers.None, Keys.F8))
+            if (!Win32API.RegisterHotKey(this.Handle, this.hotkeyId, commonlib.winapi.Win32API.KeyModifiers.None, Keys.F8))
             {
                 MessageBox.Show("热键注册失败");
             }
@@ -108,29 +109,44 @@ namespace IEXPath
                 if (doc2 != null)
                 {
                     Point point = MousePosition;
-
                     Win32API.ScreenToClient(hWnd, ref point);
-
                     IHTMLElement element = doc2.elementFromPoint(point.X, point.Y);
-
-                    readIEElement(element);
+                A: if (element != null && element.tagName == "IFRAME")
+                    {
+                        Console.WriteLine("\r\n------IFRAMEInfo----");
+                        Console.WriteLine("X:" + point.X + "Y:" + point.Y);
+                        Console.WriteLine("L:" + element.offsetLeft.ToString() + "T:" + element.offsetTop.ToString());
+                        var xx = point.X - element.offsetLeft;
+                        var yy = point.Y - element.offsetTop;
+                        point = new Point(xx, yy);
+                        Console.WriteLine("xx:" + xx + "yy:" + yy);
+                        var iframe = (element as IHTMLFrameBase2).contentWindow;
+                        element = iframe.document.elementFromPoint(xx,yy);
+                        goto A;
+                    }
+                    if (element != null)
+                    {
+                        //Console.WriteLine($"\r\nelement.offsetHeight:{element.offsetHeight}\r\nelement.offsetWidth:{element.offsetWidth}\r\n element.offsetLeft:{element.offsetLeft}\r\n element.offsetTop:{element.offsetTop}");
+                        readIEElement(element);
+                    }
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                MessageBox.Show("发生了一些错误：" + e.Message);
+                Console.WriteLine(e.Message);
+                //MessageBox.Show("发生了一些错误：" + e.Message);
             }
         }
 
         private IHTMLElement lastEle = null;
 
-        
+
         /**
          * 读取元素基本信息和提取XPATH
          */
         private void readIEElement(IHTMLElement e)
         {
-            
+
             if (lastEle == e)
             {
                 return;
@@ -146,7 +162,8 @@ namespace IEXPath
             }
 
             //画红框
-            e.style.setAttribute("outline", "2px solid red");
+            e.style.setAttribute("outline", "3px solid red");
+            //e.style.setAttribute("background", "green");
 
             // 基本信息
             this.txtID.Text = e.id;
@@ -171,7 +188,7 @@ namespace IEXPath
             // id 
             if (e.id != null)
             {
-                addXPath( "//*[@id=" + SPLIT + e.id + SPLIT + "]");
+                addXPath("//*[@id=" + SPLIT + e.id + SPLIT + "]");
                 return;
             }
 
@@ -180,7 +197,7 @@ namespace IEXPath
 
             // name
             string name = getElementAttribute(e, "NAME");
-            
+
             if (name != "")
             {
                 addXPath("//" + e.tagName + "[@name=" + SPLIT + name + SPLIT + "]");
@@ -230,9 +247,10 @@ namespace IEXPath
                     xpath = "//*[@id=" + SPLIT + current.id + SPLIT + "]" + xpath;
                     break;
                 }
-                else{
+                else
+                {
                     string currentXpath = extractCurrentXpath(current);
-                    xpath =  currentXpath + xpath;
+                    xpath = currentXpath + xpath;
                 }
 
                 current = current.parentElement;
@@ -244,7 +262,7 @@ namespace IEXPath
         /**
          * 当前节点的xpath
          * 返回结果如: /INPUT[2]
-         */ 
+         */
         private string extractCurrentXpath(IHTMLElement current)
         {
             string currentXpath = "/" + current.tagName;
@@ -263,10 +281,10 @@ namespace IEXPath
         /**
          * 计算当前元素在父元素中相同的tag中的index
          * xpath的index是从1开始的
-         */ 
+         */
         private int calculate(IHTMLElement current)
         {
-            if (current.parentElement == null) 
+            if (current.parentElement == null)
             {
                 return 0;
             }
@@ -282,9 +300,9 @@ namespace IEXPath
                 IHTMLElement item = collection.item(i);
 
                 // 实际测试中发生过
-                if (item == null) 
-                { 
-                   break; 
+                if (item == null)
+                {
+                    break;
                 }
 
                 if (item.tagName == current.tagName)
@@ -293,9 +311,9 @@ namespace IEXPath
 
                     if (item == current)
                     {
-                        index = all ;
+                        index = all;
                     }
-                }               
+                }
             }
 
             // 只有一个元素，就不需要[1]
